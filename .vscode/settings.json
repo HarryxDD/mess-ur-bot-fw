@@ -1,0 +1,4 @@
+{
+  "C_Cpp.default.configurationProvider": "platformio.platformio-ide",
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/compile_commands.json"
+}

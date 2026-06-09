@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "PlatformIO: Merge compile databases",
+      "type": "shell",
+      "command": "bash",
+      "args": ["${workspaceFolder}/merge_compiledb.sh"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "PlatformIO: Build sender",
+      "type": "shell",
+      "command": "pio",
+      "args": ["run", "-e", "sender"],
+      "problemMatcher": ["$gcc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "PlatformIO: Build receiver",
+      "type": "shell",
+      "command": "pio",
+      "args": ["run", "-e", "receiver"],
+      "problemMatcher": ["$gcc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}
