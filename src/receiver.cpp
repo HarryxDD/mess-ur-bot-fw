@@ -3,6 +3,7 @@
 #include <esp_now.h>
 #include <ESP32Servo.h>
 #include "shared.h"
+#include "expressions.h"
 
 Servo servoShoulder;
 Servo servoSweep;
@@ -35,17 +36,17 @@ const unsigned long WINDOW_MS = 200;
 int tiltActivity = 0;
 
 // hit/cuddle thresholds
-const float HIT_FORCE = 8.0f;
-const int   HIT_WOBBLE = 150;
-const int CUDDLE_WOBBLE = 50;
-const float CUDDLE_FORCE = 1.5f;
+const int   HIT_WOBBLE = 80;
+const int CUDDLE_WOBBLE = 40;
+
+BotState botState = CALM;
+BotState lastState = CALM;
+unsigned long stateHoldUntil = 0; 
+const unsigned long HOLD_MS = 3000;
 
 unsigned long lastUpdate = 0;
 volatile bool newData = false;
 ArmPacket received;
-
-enum BotState { CALM, CUDDLE, HIT, FALLEN };
-BotState botState = CALM;
 
 int mapMicroseconds(float v, float inMin, float inMax, int usMin, int usMax) {
     float out = (v - inMin) * (usMax - usMin) / (inMax - inMin) + usMin;
@@ -67,6 +68,8 @@ void setup() {
 
     pinMode(PIN_TILT, INPUT_PULLUP);
     pinMode(PIN_LED, OUTPUT);
+
+    expressionsBegin();
 
     ESP32PWM::allocateTimer(0);
     ESP32PWM::allocateTimer(1);
@@ -94,15 +97,6 @@ void loop() {
         targetShoulderUs = mapMicroseconds(received.upperPitch, UPPER_PITCH_MIN, UPPER_PITCH_MAX, SHOULDER_US_MIN, SHOULDER_US_MAX);
         targetSweepUs    = mapMicroseconds(received.upperRoll,  UPPER_ROLL_MIN,  UPPER_ROLL_MAX, SWEEP_US_MIN, SWEEP_US_MAX);
         targetElbowUs    = mapMicroseconds(received.elbowAngle, ELBOW_MIN,       ELBOW_MAX, ELBOW_US_MIN, ELBOW_US_MAX);
-
-        // classify gesture: arm force AND bot wobble
-        float f = received.jerk;
-        if (
-            // f > HIT_FORCE && 
-            tiltActivity >= HIT_WOBBLE
-        ) botState = HIT;
-        else if (tiltActivity >= CUDDLE_WOBBLE) botState = CUDDLE;
-        else botState = CALM;
     }
 
     int tiltNow = digitalRead(PIN_TILT);
@@ -111,6 +105,19 @@ void loop() {
         windowStart = millis();
         tiltActivity = tiltTransitions;
         tiltTransitions = 0;
+
+        // only allow a NEW reaction if we're not currently holding one
+        if (millis() >= stateHoldUntil) {
+            if (tiltActivity >= HIT_WOBBLE) {
+                botState = HIT;
+                stateHoldUntil = millis() + HOLD_MS;   // lock for 3s
+            } else if (tiltActivity >= CUDDLE_WOBBLE) {
+                botState = CUDDLE;
+                stateHoldUntil = millis() + HOLD_MS;   // lock for 3s
+            } else {
+                botState = CALM;                       // calm is not held
+            }
+        }
     }
 
     if (millis() - lastUpdate >= 20) { // 50Hz update rate
@@ -125,5 +132,12 @@ void loop() {
 
         const char* names[] = {"CALM","CUDDLE","HIT","FALLEN"};
         Serial.printf("force=%.2f wobble=%d state=%s\n", received.jerk, tiltActivity, names[botState]);
+
+        if (botState != lastState) {
+            showState(botState);
+            lastState = botState;
+        } else if (botState == CALM) {
+            updateIdle();
+        }
     }
 }
