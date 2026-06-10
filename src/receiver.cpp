@@ -8,26 +8,40 @@ Servo servoShoulder;
 Servo servoSweep;   
 Servo servoElbow;   
 
-const int PIN_SHOULDER = 13;
-const int PIN_SWEEP    = 12;
-const int PIN_ELBOW    = 14;
+const int PIN_SHOULDER = 25;
+const int PIN_SWEEP    = 26;
+const int PIN_ELBOW    = 27;
 
 // Ranges
-const float UPPER_PITCH_MIN = -70, UPPER_PITCH_MAX = 70;
-const float UPPER_ROLL_MIN  = -40, UPPER_ROLL_MAX  = 20;
-const float ELBOW_MIN       = -40, ELBOW_MAX       = 110;
+const float UPPER_PITCH_MIN = -25, UPPER_PITCH_MAX = 80;
+const float UPPER_ROLL_MIN  = -55, UPPER_ROLL_MAX  = 15;
+const float ELBOW_MIN       = -85, ELBOW_MAX       = 20;
 
-const int SERVO_MIN = 0, SERVO_MAX = 180;
+// const int SHOULDER_OUT_MIN = 40, SHOULDER_OUT_MAX = 140;
+// const int SWEEP_OUT_MIN    = 50,  SWEEP_OUT_MAX    = 130;
+// const int ELBOW_OUT_MIN    = 30,  ELBOW_OUT_MAX    = 150;
 
-float posShoulder = 90, posSweep = 90, posElbow = 90;
+const int SHOULDER_US_MIN = 1100, SHOULDER_US_MAX = 1900;
+const int SWEEP_US_MIN    = 1150, SWEEP_US_MAX    = 1850;
+const int ELBOW_US_MIN    = 1050, ELBOW_US_MAX    = 1950;
+
+const int PWM_MIN = 500, PWM_MAX = 2400;
+float posShoulderUs = 1450, posSweepUs = 1450, posElbowUs = 1450;
+int targetShoulderUs = 1450, targetSweepUs = 1450, targetElbowUs = 1450;
 const float SMOOTH = 0.15f;
+unsigned long lastUpdate = 0;
 
 volatile bool newData = false;
 ArmPacket received;
 
-int mapAngle(float v, float inMin, float inMax) {
-    float out = (v - inMin) * (SERVO_MAX - SERVO_MIN) / (inMax - inMin) + SERVO_MIN;
-    return constrain((int)out, SERVO_MIN, SERVO_MAX);
+// int mapMicroseconds(float v, float inMin, float inMax) {
+//     float out = (v - inMin) * (PWM_MAX - PWM_MIN) / (inMax - inMin) + PWM_MIN;
+//     return constrain((int)out, PWM_MIN, PWM_MAX);
+// }
+
+int mapMicroseconds(float v, float inMin, float inMax, int usMin, int usMax) {
+    float out = (v - inMin) * (usMax - usMin) / (inMax - inMin) + usMin;
+    return constrain((int)out, usMin, usMax);
 }
 
 void onRecv(const uint8_t *mac, const uint8_t *data, int len) {
@@ -56,9 +70,9 @@ void setup() {
     servoSweep.attach(PIN_SWEEP, 500, 2400);
     servoElbow.attach(PIN_ELBOW, 500, 2400);
 
-    servoShoulder.write((int)posShoulder);
-    servoSweep.write((int)posSweep);
-    servoElbow.write((int)posElbow);
+    servoShoulder.writeMicroseconds((int)posShoulderUs);
+    servoSweep.writeMicroseconds((int)posSweepUs);
+    servoElbow.writeMicroseconds((int)posElbowUs);
 
     if (esp_now_init() != ESP_OK) { Serial.println("ESP-NOW init failed"); while (1) delay(10); }
     esp_now_register_recv_cb(onRecv);
@@ -73,20 +87,21 @@ void loop() {
                       received.upperPitch, received.upperRoll,
                       received.forePitch, received.elbowAngle);
 
-        int targetShoulder = mapAngle(received.upperPitch, UPPER_PITCH_MIN, UPPER_PITCH_MAX);
-        int targetSweep    = mapAngle(received.upperRoll,  UPPER_ROLL_MIN,  UPPER_ROLL_MAX);
-        int targetElbow    = mapAngle(received.elbowAngle, ELBOW_MIN,       ELBOW_MAX);
+        targetShoulderUs = mapMicroseconds(received.upperPitch, UPPER_PITCH_MIN, UPPER_PITCH_MAX, SHOULDER_US_MIN, SHOULDER_US_MAX);
+        targetSweepUs    = mapMicroseconds(received.upperRoll,  UPPER_ROLL_MIN,  UPPER_ROLL_MAX, SWEEP_US_MIN, SWEEP_US_MAX);
+        targetElbowUs    = mapMicroseconds(received.elbowAngle, ELBOW_MIN,       ELBOW_MAX, ELBOW_US_MIN, ELBOW_US_MAX);
+    }
+
+    if (millis() - lastUpdate >= 20) { // 50Hz update rate
+        lastUpdate = millis();
 
         // Ease current position toward target (exponential smoothing)
-        posShoulder += SMOOTH * (targetShoulder - posShoulder);
-        posSweep    += SMOOTH * (targetSweep    - posSweep);
-        posElbow    += SMOOTH * (targetElbow    - posElbow);
+        posShoulderUs += SMOOTH * (targetShoulderUs - posShoulderUs);
+        posSweepUs    += SMOOTH * (targetSweepUs    - posSweepUs);
+        posElbowUs    += SMOOTH * (targetElbowUs    - posElbowUs);
 
-        servoShoulder.write((int)posShoulder);
-        servoSweep.write((int)posSweep);
-        servoElbow.write((int)posElbow);
-
-        Serial.printf("SH=%d SW=%d EL=%d\n",
-                      (int)posShoulder, (int)posSweep, (int)posElbow);
+        servoShoulder.writeMicroseconds((int)posShoulderUs);
+        servoSweep.writeMicroseconds((int)posSweepUs);
+        servoElbow.writeMicroseconds((int)posElbowUs);
     }
 }
