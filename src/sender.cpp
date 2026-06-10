@@ -22,6 +22,9 @@ float upperPitchEst = 0, upperRollEst = 0, forePitchEst = 0;
 unsigned long lastMicros = 0;
 const float ALPHA = 0.98f;
 
+float forceEst = 0;
+const float FORCE_ALPHA = 0.5f;
+
 unsigned long lastSend = 0;
 const unsigned long SEND_INTERVAL_MS = 100;
 
@@ -102,17 +105,21 @@ void loop() {
     float fGy = mpuFore.getGyroY_rads() * 180.0 / PI;
     forePitchEst = ALPHA * (forePitchEst + fGy * dt) + (1 - ALPHA) * accelPitch(fAx, fAy, fAz);
 
+    float accelMag = sqrt(uAx * uAx + uAy * uAy + uAz * uAz);
+    float force = fabs(accelMag - 9.81f);
+    forceEst = FORCE_ALPHA * force + (1 - FORCE_ALPHA) * forceEst;
+
     if (millis() - lastSend >= SEND_INTERVAL_MS) {
         lastSend = millis();
         packet.upperPitch = upperPitchEst;
         packet.upperRoll  = upperRollEst;
         packet.forePitch  = forePitchEst;
         packet.elbowAngle = forePitchEst - upperPitchEst;
-        packet.jerk       = 0;
+        packet.jerk       = forceEst;
 
         esp_now_send(RECEIVER_MAC, (uint8_t *)&packet, sizeof(packet));
 
-        Serial.printf("uPitch=%.1f uRoll=%.1f fPitch=%.1f elbow=%.1f\n",
-                      packet.upperPitch, packet.upperRoll, packet.forePitch, packet.elbowAngle);
+        Serial.printf("uPitch=%.1f uRoll=%.1f fPitch=%.1f elbow=%.1f jerk=%.1f\n",
+                      packet.upperPitch, packet.upperRoll, packet.forePitch, packet.elbowAngle, packet.jerk);
     }
 }
