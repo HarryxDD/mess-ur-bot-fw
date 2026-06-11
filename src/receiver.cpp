@@ -19,9 +19,9 @@ const int PIN_LED = 13;
 const float UPPER_PITCH_MIN = -25, UPPER_PITCH_MAX = 80;
 const float UPPER_ROLL_MIN  = -55, UPPER_ROLL_MAX  = 15;
 const float ELBOW_MIN       = -85, ELBOW_MAX       = 20;
-const int SHOULDER_US_MIN = 1100, SHOULDER_US_MAX = 1900;
-const int SWEEP_US_MIN    = 1150, SWEEP_US_MAX    = 1850;
-const int ELBOW_US_MIN    = 1050, ELBOW_US_MAX    = 1950;
+const int SHOULDER_US_MIN = 400, SHOULDER_US_MAX = 1800;
+const int SWEEP_US_MIN    = 550, SWEEP_US_MAX    = 2050;
+const int ELBOW_US_MIN    = 850, ELBOW_US_MAX    = 2050;
 const int PWM_MIN = 500, PWM_MAX = 2400;
 
 float posShoulderUs = 1450, posSweepUs = 1450, posElbowUs = 1450;
@@ -36,8 +36,8 @@ const unsigned long WINDOW_MS = 200;
 int tiltActivity = 0;
 
 // hit/cuddle thresholds
-const int   HIT_WOBBLE = 80;
-const int CUDDLE_WOBBLE = 40;
+const int   HIT_WOBBLE = 50;
+const int CUDDLE_WOBBLE = 20;
 
 BotState botState = CALM;
 BotState lastState = CALM;
@@ -94,7 +94,8 @@ void loop() {
     if (newData) {
         newData = false;
 
-        targetShoulderUs = mapMicroseconds(received.upperPitch, UPPER_PITCH_MIN, UPPER_PITCH_MAX, SHOULDER_US_MIN, SHOULDER_US_MAX);
+        // targetShoulderUs = mapMicroseconds(received.upperPitch, UPPER_PITCH_MIN, UPPER_PITCH_MAX, SHOULDER_US_MIN, SHOULDER_US_MAX);
+        targetShoulderUs = mapMicroseconds(received.upperPitch, UPPER_PITCH_MAX, UPPER_PITCH_MIN, SHOULDER_US_MIN, SHOULDER_US_MAX);
         targetSweepUs    = mapMicroseconds(received.upperRoll,  UPPER_ROLL_MIN,  UPPER_ROLL_MAX, SWEEP_US_MIN, SWEEP_US_MAX);
         targetElbowUs    = mapMicroseconds(received.elbowAngle, ELBOW_MIN,       ELBOW_MAX, ELBOW_US_MIN, ELBOW_US_MAX);
     }

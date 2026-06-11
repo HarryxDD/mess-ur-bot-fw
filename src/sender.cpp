@@ -53,10 +53,10 @@ void setup() {
     delay(500);
 
     Wire.begin(I2C0_SDA, I2C0_SCL);
-    Wire.setClock(400000); // 400kHz fast mode
+    Wire.setClock(100000); // 400kHz fast mode
 
     Wire1.begin(I2C1_SDA, I2C1_SCL);
-    Wire1.setClock(400000); // 400kHz fast mode
+    Wire1.setClock(100000); // 400kHz fast mode
 
     if (!startIMU(mpuUpper, "Upper IMU")) while (1) delay(10);
     if (!startIMU(mpuFore,  "Fore IMU"))  while (1) delay(10);
@@ -91,8 +91,18 @@ void loop() {
     float dt = (now - lastMicros) / 1e6f;
     lastMicros = now;
 
-    // Upperarm IMU
-    mpuUpper.readSensor();
+    if (mpuUpper.readSensor() < 0)
+    {
+        // read failed this cycle
+    }
+    else
+    {
+        float uAx = mpuUpper.getAccelX_mss(), uAy = mpuUpper.getAccelY_mss(), uAz = mpuUpper.getAccelZ_mss();
+        float uGy = mpuUpper.getGyroY_rads() * 180.0 / PI;
+        float uGx = mpuUpper.getGyroX_rads() * 180.0 / PI;
+        upperPitchEst = ALPHA * (upperPitchEst + uGy * dt) + (1 - ALPHA) * accelPitch(uAx, uAy, uAz);
+        upperRollEst = ALPHA * (upperRollEst + uGx * dt) + (1 - ALPHA) * accelRoll(uAx, uAy, uAz);
+    }
     float uAx = mpuUpper.getAccelX_mss(), uAy = mpuUpper.getAccelY_mss(), uAz = mpuUpper.getAccelZ_mss();
     float uGy = mpuUpper.getGyroY_rads() * 180.0 / PI;   // pitch-axis rate, deg/s
     float uGx = mpuUpper.getGyroX_rads() * 180.0 / PI;   // roll-axis rate, deg/s
