@@ -35,14 +35,25 @@ unsigned long windowStart = 0;
 const unsigned long WINDOW_MS = 200;
 int tiltActivity = 0;
 
-// hit/cuddle thresholds
-const int   HIT_WOBBLE = 50;
-const int CUDDLE_WOBBLE = 20;
+// rolling history of wobble (last HIST_SIZE windows)
+const int HIST_SIZE = 10;
+int wobbleHist[HIST_SIZE] = {0};
+int histIndex = 0;
+
+int wobbleMean() {
+    long sum = 0;
+    for (int i = 0; i < HIST_SIZE; i++) sum += wobbleHist[i];
+    return (int)(sum / HIST_SIZE);
+}
+
+// hit/cuddle thresholds (tune against the AVERAGED value)
+const int HIT_WOBBLE    = 20;
+const int CUDDLE_WOBBLE = 10;
 
 BotState botState = CALM;
 BotState lastState = CALM;
-unsigned long stateHoldUntil = 0; 
-const unsigned long HOLD_MS = 3000;
+unsigned long stateHoldUntil = 0;
+const unsigned long HOLD_MS = 0;
 
 unsigned long lastUpdate = 0;
 volatile bool newData = false;
@@ -94,7 +105,6 @@ void loop() {
     if (newData) {
         newData = false;
 
-        // targetShoulderUs = mapMicroseconds(received.upperPitch, UPPER_PITCH_MIN, UPPER_PITCH_MAX, SHOULDER_US_MIN, SHOULDER_US_MAX);
         targetShoulderUs = mapMicroseconds(received.upperPitch, UPPER_PITCH_MAX, UPPER_PITCH_MIN, SHOULDER_US_MIN, SHOULDER_US_MAX);
         targetSweepUs    = mapMicroseconds(received.upperRoll,  UPPER_ROLL_MIN,  UPPER_ROLL_MAX, SWEEP_US_MIN, SWEEP_US_MAX);
         targetElbowUs    = mapMicroseconds(received.elbowAngle, ELBOW_MIN,       ELBOW_MAX, ELBOW_US_MIN, ELBOW_US_MAX);
@@ -107,16 +117,21 @@ void loop() {
         tiltActivity = tiltTransitions;
         tiltTransitions = 0;
 
+        // push into rolling history and classify on the MEAN
+        wobbleHist[histIndex] = tiltActivity;
+        histIndex = (histIndex + 1) % HIST_SIZE;
+        int avg = wobbleMean();
+
         // only allow a NEW reaction if we're not currently holding one
         if (millis() >= stateHoldUntil) {
-            if (tiltActivity >= HIT_WOBBLE) {
+            if (avg >= HIT_WOBBLE) {
                 botState = HIT;
-                stateHoldUntil = millis() + HOLD_MS;   // lock for 3s
-            } else if (tiltActivity >= CUDDLE_WOBBLE) {
+                stateHoldUntil = millis() + HOLD_MS;
+            } else if (avg >= CUDDLE_WOBBLE) {
                 botState = CUDDLE;
-                stateHoldUntil = millis() + HOLD_MS;   // lock for 3s
+                stateHoldUntil = millis() + HOLD_MS;
             } else {
-                botState = CALM;                       // calm is not held
+                botState = CALM;
             }
         }
     }
@@ -132,7 +147,7 @@ void loop() {
         servoElbow.writeMicroseconds((int)posElbowUs);
 
         const char* names[] = {"CALM","CUDDLE","HIT","FALLEN"};
-        Serial.printf("force=%.2f wobble=%d state=%s\n", received.jerk, tiltActivity, names[botState]);
+        Serial.printf("wobble=%d avg=%d state=%s\n", tiltActivity, wobbleMean(), names[botState]);
 
         if (botState != lastState) {
             showState(botState);
